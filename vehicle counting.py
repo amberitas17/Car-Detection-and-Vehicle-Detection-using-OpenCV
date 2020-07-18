@@ -1,0 +1,116 @@
+import numpy as np
+import cv2
+
+
+threshold = 600
+
+"""
+Opencv api reference:
+Labels is a matrix the size of the input image where each element has a value equal to its label.
+
+Stats is a matrix of the stats that the function calculates. It has a length equal to the number of labels and a width equal to the number of stats. It can be used with the OpenCV documentation for it:
+
+Statistics output for each label, including the background label, see below for available statistics. Statistics are accessed via stats[label, COLUMN] where available columns are defined below.
+
+cv2.CC_STAT_LEFT The leftmost (x) coordinate which is the inclusive start of the bounding box in the horizontal direction.
+cv2.CC_STAT_TOP The topmost (y) coordinate which is the inclusive start of the bounding box in the vertical direction.
+cv2.CC_STAT_WIDTH The horizontal size of the bounding box
+cv2.CC_STAT_HEIGHT The vertical size of the bounding box
+cv2.CC_STAT_AREA The total area (in pixels) of the connected component
+Centroids is a matrix with the x and y locations of each centroid. The row in this matrix corresponds to the label number.
+
+
+"""
+def cluster_analysis(frame,i):
+    src = frame
+    # You need to choose 4 or 8 for connectivity type
+    connectivity = 8
+    # Perform the operation
+    output = cv2.connectedComponentsWithStats(frame, connectivity, cv2.CV_32S)
+    # Get the results
+    # The first cell is the number of labels
+    num_labels = output[0]
+    #print num_labels
+    # The second cell is the label matrix
+    labels = output[1]
+
+    #print np.count_nonzero(labels)
+    # The third cell is the stat matrix
+    stats = output[2]
+    #print stats
+    # The fourth cell is the centroid matrix
+    centroids = output[3]
+    #print centroids
+    k=0
+    lis=[]
+    for l in stats:
+        if l[4]>=threshold:
+            lis.append([l[0],l[1],l[0]+l[2], l[1]+l[3]])
+    k+=1
+    return lis
+
+
+
+"""
+Capturing the video. opencv provides an
+inbuilt api function to work for videos.
+It extracts the image one by one.
+
+"""
+cap = cv2.VideoCapture('video3.mp4')
+ret, frame = cap.read()
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(4,4))
+kernel2 = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(20,20))
+
+fgbg = cv2.createBackgroundSubtractorMOG2()
+i=0
+
+"""
+This loop will run till the end of the video.
+For chaging threshold, change the values at the
+declarations at the top.
+
+"""
+while True:
+    ret, frame = cap.read()
+
+    fgmask = fgbg.apply(frame)
+
+######## Apply Morphological Filtering
+
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
+
+    fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_CLOSE, kernel2)
+
+
+######### Apply thresholding. There is no need
+######### for Ostu Method. We can remove the shadows from the obtained frame.
+
+    ### shadows turns to backgrounds
+    #ret2,img = cv2.threshold(fgmask,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    ret, img = cv2.threshold(fgmask, 127, 255, 0)
+
+    #####  Applying Cluster Analysis
+
+
+
+    lis = cluster_analysis(img,i)
+    for l in lis:
+        frame = cv2.rectangle(frame,(l[0],l[1]),(l[2],l[3]),(0,0,255),2)
+
+    #######  Drawing the text on the top corner of video frame.
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(frame,"Vehicles: " + str(len(lis)-1),(60,60), font, 1,(0,0,255),3)
+    #frame = cv2.fillPoly( frame, pts, 0 )
+
+    ### Printing the frame.
+    cv2.imshow('frame',frame)
+
+    k = cv2.waitKey(30) & 0xff
+    if k == 27:
+        break
+    i+=1
+
+cap.release()
+cv2.destroyAllWindows()
+
